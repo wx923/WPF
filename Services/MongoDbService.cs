@@ -12,6 +12,7 @@ public class MongoDbService
 {
     private readonly IMongoDatabase _database;
     private readonly IMongoCollection<PlcData> _plcDataCollection;
+    private readonly IMongoCollection<WorkParameterFile> _workParameterFileCollection;
 
     /// <summary>
     /// 初始化MongoDB服务
@@ -24,6 +25,7 @@ public class MongoDbService
         var client = new MongoClient(connectionString);
         _database = client.GetDatabase(databaseName);
         _plcDataCollection = _database.GetCollection<PlcData>(collectionName);
+        _workParameterFileCollection = _database.GetCollection<WorkParameterFile>("WorkParameterFiles");
         
         // 创建索引
         CreateIndexes();
@@ -184,6 +186,32 @@ public class MongoDbService
         {
             throw new MongoDbServiceException("获取统计信息失败", ex);
         }
+    }
+
+    public async Task SaveWorkParameterFileAsync(WorkParameterFile file)
+    {
+        await _workParameterFileCollection.InsertOneAsync(file);
+    }
+
+    public async Task UpdateWorkParametersAsync(List<WorkParameter> parameters)
+    {
+        var bulkOps = parameters.Select(p =>
+            new ReplaceOneModel<WorkParameter>(
+                Builders<WorkParameter>.Filter.Eq(x => x.Id, p.Id),
+                p) { IsUpsert = true }
+        );
+        
+        await _workParameterFileCollection.BulkWriteAsync(bulkOps);
+    }
+
+    public async Task DeleteWorkParameterAsync(ObjectId parameterId)
+    {
+        await _workParameterFileCollection.DeleteOneAsync(
+            Builders<WorkParameterFile>.Filter.ElemMatch(
+                x => x.Parameters,
+                p => p.Id == parameterId
+            )
+        );
     }
 }
 
